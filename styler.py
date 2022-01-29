@@ -3,48 +3,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
-import matplotlib.pyplot as plt
 import copy
 
-import torchvision.transforms as transforms
-import torchvision.models as models
 
-imsize = 128
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# loader = transforms.Compose([
-#     transforms.Resize(imsize),  # нормируем размер изображения
-#     transforms.CenterCrop(imsize),
-#     transforms.ToTensor()])
-def image_loader(image_name):
-    loader = transforms.Compose([# нормируем размер изображения
-        transforms.Resize(imsize),
-        transforms.CenterCrop(imsize),
-        transforms.ToTensor()])
-    image = Image.open(image_name)
-    image = loader(image).unsqueeze(0)
-    return image.to(device, torch.float)
 
-style_img = image_loader("tmp/content.jpg")# as well as here
-content_img = image_loader("tmp/style221018376.jpg")
+from model_config import device, content_layers_default, style_layers_default, cnn_normalization_std,cnn_normalization_mean, imsize
 
-unloader = transforms.ToPILImage() # тензор в кратинку
-
-#plt.ion()
-
-def imshow(tensor, title=None):
-    image = tensor.cpu().clone()
-    image = image.squeeze(0)      # функция для отрисовки изображения
-    image = unloader(image)
-    plt.imshow(image)
-    if title is not None:
-        plt.title(title)
-    plt.show()
-
-# отрисовка
-
-#plt.figure()
-#imshow(style_img, title='Style Image')
 
 class ContentLoss(nn.Module):
     def __init__(self, target, ):
@@ -75,8 +39,7 @@ class StyleLoss(nn.Module):
         self.loss = F.mse_loss(G, self.target)
         return input
 
-cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
-cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
+
 
 
 class Normalization(nn.Module):
@@ -88,11 +51,6 @@ class Normalization(nn.Module):
     def forward(self, img):
         # normalize img
         return (img - self.mean) / self.std
-
-content_layers_default = ['conv_4']
-style_layers_default = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']
-
-cnn = models.vgg19(pretrained=True).features.to(device).eval()
 
 
 def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
@@ -149,10 +107,14 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
 
 def get_input_optimizer(input_img):
     # добоваляет содержимое тензора катринки в список изменяемых оптимизатором параметров
+
     optimizer = optim.LBFGS([input_img.requires_grad_()])
+    #optimizer = optim.ASGD([input_img.requires_grad_()]) -
+    #optimizer = optim.Rprop([input_img.requires_grad_()])
+    #optimizer = optim.Adam([input_img.requires_grad_()],lr=1)
     return optimizer
 
-def run_style_transfer(cnn, normalization_mean, normalization_std, content_img, style_img, input_img, num_steps=500, style_weight=100000, content_weight=1):
+def run_style_transfer(cnn, normalization_mean, normalization_std, content_img, style_img, input_img, num_steps=300, style_weight=100000, content_weight=1):
     """Run the style transfer."""
     print('Building the style transfer model..')
     model, style_losses, content_losses = get_style_model_and_losses(cnn,
@@ -201,27 +163,3 @@ def run_style_transfer(cnn, normalization_mean, normalization_std, content_img, 
     input_img.data.clamp_(0, 1)
 
     return input_img
-
-input_img = content_img.clone()
-# if you want to use white noise instead uncomment the below line:
-# input_img = torch.randn(content_img.data.size(), device=device)
-
-# add the original input image to the figure:
-#plt.figure()
-#imshow(input_img, title='Input Image')
-output = run_style_transfer(cnn, cnn_normalization_mean, cnn_normalization_std,
-                            content_img, style_img, input_img)
-
-
-
-plt.figure()
-image = output.cpu().clone()
-image = image.squeeze(0)  # функция для отрисовки изображения
-image = unloader(image)
-plt.imshow(image)
-plt.savefig('tmp/testplot.png')
-#imshow(output, title='Output Image')
-#plt.imsave(output, 'tmp/output.png')
-# sphinx_gallery_thumbnail_number = 4
-#plt.ioff()
-plt.show()
